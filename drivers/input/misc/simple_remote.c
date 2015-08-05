@@ -149,6 +149,7 @@ static struct device_attribute simple_remote_attrs[] = {
 struct simple_remote_driver {
 	struct switch_dev swdev;
 	struct input_dev *indev;
+	struct input_dev *indev_sw;
 	struct input_dev *indev_appkey;
 
 	atomic_t detection_in_progress;
@@ -503,7 +504,6 @@ static ssize_t simple_remote_print_name(struct switch_dev *sdev, char *buf)
 	return -EINVAL;
 }
 
-
 static void simple_remote_report_accessory_type(
 	struct simple_remote_driver *jack)
 {
@@ -527,15 +527,23 @@ static void simple_remote_report_accessory_type(
 		switch (jack->new_accessory_state) {
 		case DEVICE_UNKNOWN:
 			dev_dbg(jack->dev, "DEVICE_UNKNOWN\n");
+			input_report_switch(jack->indev_sw, SW_HEADPHONE_INSERT, 0);
+			input_report_switch(jack->indev_sw, SW_MICROPHONE_INSERT, 0);
 			break;
 		case DEVICE_UNSUPPORTED:
 			dev_err(jack->dev, "UNSUPPORTED\n");
+			input_report_switch(jack->indev_sw, SW_HEADPHONE_INSERT, 0);
+			input_report_switch(jack->indev_sw, SW_MICROPHONE_INSERT, 0);
 			break;
 		case DEVICE_HEADPHONE:
 			dev_dbg(jack->dev, "DEVICE_HEADPHONE\n");
+			input_report_switch(jack->indev_sw, SW_HEADPHONE_INSERT, 1);
+			input_report_switch(jack->indev_sw, SW_MICROPHONE_INSERT, 0);
 			break;
 		case NO_DEVICE:
 			dev_dbg(jack->dev, "NO_DEVICE\n");
+			input_report_switch(jack->indev_sw, SW_HEADPHONE_INSERT, 0);
+			input_report_switch(jack->indev_sw, SW_MICROPHONE_INSERT, 0);
 			break;
 		case DEVICE_HEADSET:
 			dev_dbg(jack->dev, "DEVICE_HEADSET\n");
@@ -543,6 +551,8 @@ static void simple_remote_report_accessory_type(
 			jack->interface->enable_mic_bias(1);
 			jack->interface->register_hssd_button_interrupt(
 				simple_remote_button_irq_handler, jack);
+			input_report_switch(jack->indev_sw, SW_HEADPHONE_INSERT, 1);
+			input_report_switch(jack->indev_sw, SW_MICROPHONE_INSERT, 1);
 			break;
 		default:
 			break;
@@ -550,6 +560,8 @@ static void simple_remote_report_accessory_type(
 		switch_set_state(&jack->swdev, jack->new_accessory_state);
 		wake_lock_timeout(&jack->lock, HZ / 2);
 		jack->current_accessory_state = jack->new_accessory_state;
+
+		input_sync(jack->indev_sw);
 	}
 }
 
@@ -928,12 +940,42 @@ static int simple_remote_probe(struct platform_device *pdev)
 				"input device failed\n");
 		goto err_register_input_appkey_dev;
 	}
+
+	/* Create input device for switch events. */
+	jack->indev_sw = input_allocate_device();
+	if (!jack->indev_sw) {
+		ret = -ENOMEM;
+		dev_err(jack->dev, "Failed to allocate switch input device\n");
+		goto err_allocate_input_sw_dev;
+	}
+
+	jack->indev_sw->name = "h2w_jack";
+	jack->indev_sw->evbit[0] = BIT_MASK(EV_SW);
+	jack->indev_sw->swbit[BIT_WORD(SW_HEADPHONE_INSERT)] |= BIT_MASK(SW_HEADPHONE_INSERT);
+	jack->indev_sw->swbit[BIT_WORD(SW_MICROPHONE_INSERT)] |= BIT_MASK(SW_MICROPHONE_INSERT);
+
+	jack->indev_sw->open = simple_remote_open;
+	jack->indev_sw->close = simple_remote_close;
+
+	input_set_drvdata(jack->indev_sw, jack);
+
+	ret = input_register_device(jack->indev_sw);
+	if (ret) {
+		dev_err(jack->dev, "input_register_device for switch input device "
+			"failed\n");
+		goto err_register_input_sw_dev;
+	}
+
 	wake_lock_init(&jack->lock, WAKE_LOCK_SUSPEND, "simple remote");
 
 	dev_info(jack->dev, "***** Successfully registered\n");
 
 	return ret;
 
+err_register_input_sw_dev:
+	input_free_device(jack->indev_sw);
+err_allocate_input_sw_dev:
+	input_unregister_device(jack->indev_sw);
 err_register_input_appkey_dev:
 	input_free_device(jack->indev_appkey);
 err_allocate_input_appkey_dev:
@@ -959,6 +1001,7 @@ static int simple_remote_remove(struct platform_device *pdev)
 	jack->interface->unregister_plug_detect_interrupt(jack);
 	remove_sysfs_interfaces(&pdev->dev);
 	input_unregister_device(jack->indev_appkey);
+	input_unregister_device(jack->indev_sw);
 	input_unregister_device(jack->indev);
 	switch_dev_unregister(&jack->swdev);
 	wake_lock_destroy(&jack->lock);
