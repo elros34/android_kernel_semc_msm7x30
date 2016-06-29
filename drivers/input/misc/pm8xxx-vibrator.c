@@ -18,6 +18,7 @@
 #include <linux/input.h>
 #include <linux/slab.h>
 #include <linux/mfd/pm8xxx/core.h>
+#include <linux/mfd/pm8xxx/vibrator.h>
 
 #define VIB_DRV			0x4A
 
@@ -45,6 +46,7 @@ struct pm8xxx_vib {
 	struct input_dev *vib_input_dev;
 	struct work_struct work;
 	struct device *dev;
+	const struct pm8xxx_vibrator_platform_data *pdata;
 	int speed;
 	int level;
 	bool active;
@@ -181,12 +183,27 @@ static int pm8xxx_vib_play_effect(struct input_dev *dev, void *data,
 static int __devinit pm8xxx_vib_probe(struct platform_device *pdev)
 
 {
+	const struct pm8xxx_vibrator_platform_data *pdata =
+						pdev->dev.platform_data;
 	struct pm8xxx_vib *vib;
 	struct input_dev *input_dev;
 	int error;
 	u8 val;
 
+	if (!pdata)
+		return -EINVAL;
+
+	if (pdata->level_mV < VIB_MIN_LEVEL_mV ||
+			 pdata->level_mV > VIB_MAX_LEVEL_mV)
+		return -EINVAL;
+
 	vib = kzalloc(sizeof(*vib), GFP_KERNEL);
+	if (!vib)
+		return -ENOMEM;
+
+	vib->pdata	= pdata;
+	vib->level	= pdata->level_mV / 100;
+
 	input_dev = input_allocate_device();
 	if (!vib || !input_dev) {
 		dev_err(&pdev->dev, "couldn't allocate memory\n");

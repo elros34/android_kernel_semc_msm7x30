@@ -530,7 +530,11 @@ static struct pm8xxx_mpp_platform_data pm8xxx_mpp_pdata = {
 
 static struct pm8xxx_vibrator_platform_data pm8xxx_vibrator_pdata = {
 	.initial_vibrate_ms	= 0,
+#ifdef CONFIG_PMIC8XXX_VIBRATOR
 	.level_mV		= CONFIG_PMIC8XXX_VIBRATOR_VOLTAGE,
+#else
+	.level_mV		= 2800,
+#endif
 	.max_timeout_ms		= 15000,
 };
 
