@@ -18,7 +18,7 @@
 
 static const unsigned int pm8xxx_keymap[] = {
 	KEY(0, 1, KEY_CAMERA_FOCUS),	/* FOCUS */
-	KEY(0, 2, KEY_COMPOSE),		/* PICTSYMBOLS */
+    KEY(0, 2, KEY_LEFTALT),		/* PICTSYMBOLS */
 	KEY(0, 3, KEY_SPACE),		/* SPACE */
 	KEY(0, 4, KEY_ENTER),		/* ENTER */
 	KEY(0, 5, KEY_DOT),		/* PERIOD */
@@ -48,14 +48,14 @@ static const unsigned int pm8xxx_keymap[] = {
 	KEY(4, 3, KEY_R),		/* R */
 	KEY(4, 4, KEY_C),		/* C */
 	KEY(4, 5, KEY_T),		/* T */
-	KEY(4, 6, KEY_LEFTALT),		/* ALT_LEFT */
+    KEY(4, 6, KEY_LEFTCTRL),		/* ALT_LEFT */
 	KEY(4, 7, KEY_V),		/* V */
 
 	KEY(5, 1, KEY_G),		/* G */
 	KEY(5, 2, KEY_LEFTBRACE),	/* AT */
 	KEY(5, 4, KEY_Y),		/* Y */
 	KEY(5, 5, KEY_H),		/* H */
-	KEY(5, 6, KEY_LANGUAGE),	/* LANGUAGE_SWITCH */
+    KEY(5, 6, KEY_RIGHTALT),	/* LANGUAGE_SWITCH */
 	KEY(5, 7, KEY_X),		/* X */
 
 	KEY(6, 1, KEY_U),		/* U */
