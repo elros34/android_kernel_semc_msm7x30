@@ -420,6 +420,7 @@ static ssize_t store_capacity_level(struct device *pdev,
 }
 #endif /* DEBUG_FS */
 
+#if 0
 static ssize_t show_capacity(struct device *dev,
 			     struct device_attribute *attr,
 			     char *buf)
@@ -461,6 +462,8 @@ static ssize_t show_capacity(struct device *dev,
 	mutex_unlock(&bd->lock);
 	return scnprintf(buf, PAGE_SIZE, "%d\n", capacity);
 }
+
+#endif
 
 /* Wrapper to i2c_smbus_read_i2c_block_data().
  * This one makes sure all 'length' bytes are read.
@@ -1178,7 +1181,6 @@ static ssize_t store_lock(struct device *pdev, struct device_attribute *attr,
 }
 
 static struct device_attribute sysfs_attrs[] = {
-	__ATTR(capacity,     S_IRUGO, show_capacity, NULL),
 	__ATTR(fg_cmd,       S_IRUSR|S_IWUSR|S_IROTH, show_fg_cmd,
 		store_fg_cmd),
 	__ATTR(fg_lock,      S_IWUSR, NULL, store_lock),
@@ -1670,10 +1672,32 @@ static int bq27520_bat_get_property(struct power_supply *bat_ps,
 		val->intval = 1;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		val->intval = bd->curr_capacity;
+        /* Might end up here during ROM mode.
+         * Android shutsdown at 0% capacity.
+         * Prevent that by never reporting 0.
+         */
+        if (bd->rom_clientp || bd->run_init_after_rom) {
+            if (!bd->cap_scale.scaled_capacity)
+                val->intval = 1;
+            else
+                val->intval = bd->cap_scale.scaled_capacity;
+
+            break;
+        } else if (!atomic_read(&bq27520_init_ok)) {
+            return -EBUSY;
+        }
+        val->intval = bd->cap_scale.scaled_capacity;
+
+#ifdef DEBUG
+        if (val->intval != bd->curr_capacity)
+            dev_dbg(&bd->clientp->dev,
+                "Report scaled cap %d (origin %d)\n",
+                val->intval, bd->curr_capacity);
+#endif
+
 #ifdef DEBUG_FS
-		if (bd->bat_cap_debug.active)
-			val->intval = bd->bat_cap_debug.value;
+        if (bd->bat_cap_debug.active)
+            val->intval = bd->bat_cap_debug.value;
 #endif
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
@@ -2180,7 +2204,8 @@ static enum power_supply_property bq27520_bat_main_props[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
-	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
+    POWER_SUPPLY_PROP_CAPACITY,
+    POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CURRENT_AVG,
 	POWER_SUPPLY_PROP_PRESENT,
