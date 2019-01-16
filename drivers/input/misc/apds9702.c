@@ -265,12 +265,55 @@ static ssize_t attr_rfilt_set(struct device *dev,
 	return -EINVAL;
 }
 
+static ssize_t attr_enable_set(struct device *dev,
+                   struct device_attribute *attr,
+                   const char *buf, size_t size)
+{
+    ssize_t ret;
+    unsigned long enable;
+    int rc;
+
+    struct apds9702data *data = dev_get_drvdata(dev);
+    ret = strict_strtoul(buf, 10, &enable);
+    if (!ret) {
+        mutex_lock(&data->lock);
+        if (enable) {
+            data->pdata->power_mode(enable);
+            rc = apds9702_do_sensing(data, enable);
+            if (rc)
+                dev_err(&data->client->dev, "%s. Failed to activate device,"
+                    " err = %d\n",	__func__, rc);
+        } else {
+            rc = apds9702_do_sensing(data, enable);
+            if (rc)
+                dev_err(&data->client->dev, "%s. Failed to deactivate device,"
+                    " err = %d\n",	__func__, rc);
+            data->pdata->power_mode(enable);
+        }
+        dev_dbg(dev, "%s enable is %ld\n", __func__, enable);
+        mutex_unlock(&data->lock);
+        return size;
+    }
+    return -EINVAL;
+}
+
+static ssize_t attr_registers_show(struct device *dev,
+                   struct device_attribute *attr,
+                   char *buf)
+{
+    struct apds9702data *data = dev_get_drvdata(dev);
+
+    return snprintf(buf, PAGE_SIZE, "0x%04X\n", data->ctl_reg);
+}
+
 static struct device_attribute attributes[] = {
 	__ATTR(threshold, 0600, attr_threshold_show, attr_threshold_set),
 	__ATTR(nburst, 0600, attr_nburst_show, attr_nburst_set),
 	__ATTR(freq, 0200, NULL, attr_freq_set),
 	__ATTR(cycle, 0200, NULL, attr_duration_cycle_set),
 	__ATTR(filter, 0200, NULL, attr_rfilt_set),
+    __ATTR(enable, 0600, NULL, attr_enable_set),
+    __ATTR(registers, 0600, attr_registers_show, NULL),
 };
 
 static int create_sysfs_interfaces(struct device *dev)
