@@ -343,6 +343,7 @@ ip6t_do_table(struct sk_buff *skb,
 	acpar.out     = out;
 	acpar.family  = NFPROTO_IPV6;
 	acpar.hooknum = hook;
+	acpar.thoff = 0;
 
 	IP_NF_ASSERT(table->valid_hooks & (1 << hook));
 
